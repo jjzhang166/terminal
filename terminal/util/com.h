@@ -14,6 +14,10 @@
 extern "C" {
 #endif
 
+int current_com_init();
+
+int current_com_uninit();
+
 int current_com_setup(COMPARAM* comPtr);
 
 int current_com_open();

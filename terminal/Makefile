@@ -8,5 +8,5 @@ C_PATH = $(SRC_PATH)
 CPP_PATH = $(SRC_PATH) 
 RESOURCES = resources/resources.o
 
-DEBUG=true
+#DEBUG=true
 include ../include.mk

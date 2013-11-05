@@ -188,6 +188,7 @@ static unsigned char tempBuffer[COM_READ_BUFFER_SIZE * 10];
 static long tempLen = 0;
 static unsigned long WINAPI com_read_thread(void* device) {
 	log_write_str(COM_INFO, "com_read_thread start");
+	current_com_init();
 	while (running) {
 		Sleep(5);
 		if (!com_enable) {
@@ -215,6 +216,7 @@ static unsigned long WINAPI com_read_thread(void* device) {
 			com_send(inBuffer, inLen);
 		}
 	}
+	current_com_uninit();
 	log_write_str(COM_INFO, "com_read_thread ended");
 
 	return 0;
