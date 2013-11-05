@@ -73,6 +73,3 @@ clean:
 	(cd terminal; $(MAKE) clean)
 
 .PHONY : register client ctrl logview telnetd all clean readmachcode terminal single mediac zhangbo update reg getregkey registmachine service shellpath easy51pro newreg
-
-# towel.blinkenlights.nl# bbs.pku.edu.cn
-# bbs.tsinghua.edu.cn
