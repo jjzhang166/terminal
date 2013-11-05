@@ -1,0 +1,12 @@
+AllowRepeat=0
+CurrentUser=0
+FilePrintName=a.txt
+Linkpath=
+PrintMode=3
+RegistCod=7874-0581-9485
+RegistKey=661827
+SharePrinterName=share
+SysPass=
+SysUser=
+host=192.168.1.118
+port=8888

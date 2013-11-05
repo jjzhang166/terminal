@@ -1,0 +1,11 @@
+
+host=64.112.8.10
+port=80
+url=/bank/cn/wizool/bank/servlet/InterfaceServlet
+
+filedir=D:\TMP
+tempdir=D:\DOWNTMP
+taskdir=D:\ROOT
+
+message.fileNotFound=文件不存在
+message.applicationName=济南微卓信息技术有限公司

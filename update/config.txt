@@ -1,0 +1,4 @@
+host=192.168.1.115
+interval=1000*60*2
+port=8888
+url=/bank/client
