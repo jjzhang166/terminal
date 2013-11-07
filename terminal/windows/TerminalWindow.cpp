@@ -23,8 +23,8 @@
 #include "../terminal.h"
 #include "../ldisc.h"
 #include "../ldiscucs.h"
-#include "../../winutil/getPcMsgApi.h"
-#include "../../winutil/encrypt.h"
+#include "../util/getPcMsgApi.h"
+#include "../util/encrypt.h"
 #include "../putty.h"
 #include "../util/Util.h"
 #include <iostream>
@@ -34,7 +34,7 @@
 #include "../pairs.h"
 #include "../util/Properties.h"
 #include "../Setting.h"
-#include "../filter.h"
+#include "../util/comapi.h"
 
 extern "C" {
 extern int com_enable;

@@ -11,13 +11,13 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
-#include "../putty.h"
-#include "../../winutil/des.h"
+#include "des.h"
 static FILE* plogfile;
 static CRITICAL_SECTION critsec;
 static int init = 0;
 static int star = 0;
-static int encr = 1;
+static int encr = TRUE;
+static int debug = TRUE;
 static unsigned char key[] = "!@#$%^&*";
 
 void log_open() {
@@ -28,6 +28,14 @@ void log_open() {
 	sprintf(tm, "%04d%02d%02d%02d%02d%02d%03d.02.log", sys.wYear, sys.wMonth,
 			sys.wDay, sys.wHour, sys.wMinute, sys.wSecond, sys.wMilliseconds);
 	plogfile = fopen(tm, "wb");
+}
+
+void log_set_enable(int enable) {
+	debug = enable;
+}
+
+void log_set_encrypt(int enable) {
+	encr = enable;
 }
 
 void log_close() {
@@ -48,7 +56,7 @@ void log_write_str(const char* type, const char * data) {
 }
 
 void log_write_err(const char* type, const char* data, unsigned long err) {
-	const char str[1024];
+	char str[1024];
 	sprintf(str, "%s(%ld)", data, err);
 	log_write_str(type, str);
 }
@@ -60,8 +68,7 @@ void log_write(const char* type, const void* data, unsigned long len) {
 	char tm[128];
 
 	//临时加入的，客户不需要修改为调试，系统默认为调试状态。
-	cfg.debug = 1;
-	if (cfg.debug == 1) {
+	if (debug) {
 		if (init == 0) {
 			init++;
 			log_open();
@@ -87,11 +94,9 @@ void log_write(const char* type, const void* data, unsigned long len) {
 			fwrite(")\r\n\r\n", 5, 1, plogfile);
 		} else {
 			unsigned char enc[8];
-			//unsigned char dec[8];
 			int ptr = 0;
 			while (ptr + 8 <= len) {
 				des(((unsigned char*)data) + ptr, key, enc, DES_ENCRYPT);
-				//des(enc, key, dec, DES_DECRYPT);
 				fwrite(enc, 8, 1, plogfile);
 				ptr += 8;
 			}
@@ -100,7 +105,6 @@ void log_write(const char* type, const void* data, unsigned long len) {
 				memset(dat, ' ', 8);
 				memcpy(dat, ((unsigned char*)data)+ptr, len-ptr);
 				des(dat, key, enc, DES_ENCRYPT);
-				//des(enc, key, dec, DES_DECRYPT);
 				fwrite(enc, 8, 1, plogfile);
 			}
 			fwrite("\r\n\r\n", 4, 1, plogfile);

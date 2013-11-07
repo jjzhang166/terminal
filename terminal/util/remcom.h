@@ -8,7 +8,7 @@
 #ifndef REMCOM_H_
 #define REMCOM_H_
 
-#include "comapi.h"
+#include "com.h"
 
 #ifdef  __cplusplus
 extern "C" {

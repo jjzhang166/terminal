@@ -1,186 +1,244 @@
 /*
- * comapi.cpp
+ * Extends.cpp
  *
- *  Created on: 2012-9-20
+ *  Created on: 2012-9-26
  *      Author: zhangbo
  */
 
-#include <windows.h>
+#include "comapi.h"
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "comapi.h"
-#include "../filter.h"
+#include <string.h>
+#include <io.h>
+#include <fcntl.h>
+#include <windows.h>
+#include <dos.h>
+#include <io.h>
+#include <conio.h>
+#include "types.h"
+#include "current_com.h"
 #include "log.h"
 
-void* com_open(LPCOMPARAM param) {
-	char com[16];
-	DCB dcb;
-	HANDLE hComm;
-	COMMTIMEOUTS timeouts;
+static int setup = 0;
+int com_enable = 0;
+static int output = 0;
+static int direct_mode = 1;
+static int line_mode = 0;
+static int running = 0;
 
-	memset(com, 0x00, 16);
-	sprintf(com, "\\\\.\\COM%d", param->bComId);
-	hComm = CreateFile(com, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL, 0);
-	if (hComm == INVALID_HANDLE_VALUE) {
-		log_write_err(COM_OPEN, "ERROR CreateFile", GetLastError());
-		CloseHandle(hComm);
-		return NULL;
+static void comapi_read_proc_start();
+
+extern void comapi_ex_send(char* data, int len);
+
+int comapi_setup(unsigned char com, int baudRate, int parity, int byteSize, int stopBits) {
+	COMPARAM p;
+	p.bEvtChar = 0x0d;
+	p.fBinary = 1;
+
+	p.bComId = com;
+
+	switch (baudRate) {
+	case 0:
+		p.dwBaudRate = 9600;
+		break;
+	case 1:
+		p.dwBaudRate = 4800;
+		break;
+	case 2:
+		p.dwBaudRate = 2400;
+		break;
+	case 3:
+		p.dwBaudRate = 1200;
+		break;
+	case 4:
+		p.dwBaudRate = 900;
+		break;
+	case 5:
+		p.dwBaudRate = 600;
+		break;
+	case 6:
+		p.dwBaudRate = 300;
+		break;
+	case 7:
+		p.dwBaudRate = 150;
+		break;
+	case 8:
+		p.dwBaudRate = 75;
+		break;
+	case 9:
+		p.dwBaudRate = 800;
+		break;
+	default:
+		p.dwBaudRate = 9600;
+		break;
 	}
 
-	if (!SetupComm(hComm, 1024*512, 1024*512)){ //输入缓冲区和输出缓冲区的大小都是2048{
-		log_write_err(COM_OPEN, "ERROR SetupComm", GetLastError());
+	switch (parity) {
+	case 0: //none
+		p.bParity = 0;
+		break;
+	case 1: //1
+		p.bParity = 1;
+		break;
+	case 2:
+		p.bParity = 2;
+		break;
+	default:
+		p.bParity = 0;
+		break;
 	}
 
-	if (!GetCommState(hComm, &dcb)) {
-		log_write_err(COM_OPEN, "ERROR GetCommState", GetLastError());
-		CloseHandle(hComm);
-		return NULL;
+	switch (byteSize) {
+	case 0:
+		p.bByteSize = 8;
+		break;
+	case 1:
+		p.bByteSize = 7;
+		break;
+	default:
+		p.bByteSize = 8;
+		break;
 	}
 
-	dcb.BaudRate = param->dwBaudRate;
-	dcb.Parity = param->bParity;
-	if (!dcb.Parity) {
-		dcb.fParity = 0;
-	}
-	dcb.StopBits = param->bStopBits;
-	dcb.ByteSize = param->bByteSize;
-	dcb.fBinary = param->fBinary;
-	dcb.EvtChar = param->bEvtChar;
-
-	if (!SetCommState(hComm, &dcb)) {
-		log_write_err(COM_OPEN, "ERROR SetCommState", GetLastError());
-		CloseHandle(hComm);
-		return NULL;
+	switch (stopBits) {
+	case 0:
+		p.bStopBits = 0; //1
+		break;
+	case 1:
+		p.bStopBits = 2; //2
+		break;
+	default:
+		p.bStopBits = 1; //1.5
+		break;
 	}
 
-	timeouts.ReadIntervalTimeout = 0;
-	timeouts.ReadTotalTimeoutConstant = 0;
-	timeouts.ReadTotalTimeoutMultiplier = 0;
-	timeouts.WriteTotalTimeoutConstant = 0;
-	timeouts.WriteTotalTimeoutMultiplier = 0;
-	if (!SetCommTimeouts(hComm, &timeouts)) {
-		log_write_err(COM_OPEN, "ERROR SetCommTimeouts", GetLastError());
-		CloseHandle(hComm);
-		return NULL;
+	current_com_setup(&p);
+	setup = 1;
+	if (com_enable && setup) {
+		current_com_open();
+		comapi_read_proc_start();
 	}
-
-//	SetCommMask(hComm, EV_RXCHAR);
-	PurgeComm(hComm,
-			PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
-
-	char data[1024];
-	sprintf(data, "COM%d", param->bComId);
-	log_write_str(COM_OPEN, data);
-
-	return hComm;
+	return TRUE;
 }
 
-unsigned long com_read(void* com, unsigned char* buffer, unsigned long bufLen) {
-	BOOL bResult = TRUE;
-	DWORD dwError = 0;
-	DWORD dwReadLen = 0;
-	COMSTAT comstat;
-	DWORD dwToReadLen = 0;
+#define COM_READ_BUFFER_SIZE 1024
 
-	bResult = ClearCommError(com, &dwError, &comstat);
-	if(!bResult) {
-		log_write_err(COM_RECV, "ERROR ClearCommError", GetLastError());
-	}
-	if (comstat.cbInQue == 0) {
-		return 0;
-	}
-
-	dwToReadLen = bufLen;
-	if (comstat.cbInQue < bufLen) {
-		dwToReadLen = comstat.cbInQue;
-	}
-
-	bResult = ReadFile(com, buffer, dwToReadLen, &dwReadLen, NULL);
-	if (!bResult) {
-		//读取失败
-		log_write_err(COM_RECV, "ERROR ReadFile", GetLastError());
-		PurgeComm(com, PURGE_RXABORT | PURGE_RXCLEAR);
-		return 0;
-	}
-
-	if (dwReadLen > 0) {
-		log_write(COM_RECV, buffer, dwReadLen);
-	}
-	return dwReadLen;
-}
-
-unsigned long com_write(void* com, const unsigned char* data, unsigned long len) {
-	BOOL bResult = TRUE;
-	DWORD dwWriteLen = 0;
-
-	bResult = WriteFile(com, data, len, &dwWriteLen, NULL);
-	if (!bResult) {
-		//写入失败
-		log_write_err(COM_SEND, "ERROR WriteFile", GetLastError());
-		PurgeComm(com, PURGE_TXABORT | PURGE_TXCLEAR);
-		return 0;
-	}
-
-	log_write(COM_SEND, data, dwWriteLen);
-
-	return dwWriteLen;
-}
-
-int com_close(void* com) {
-	BOOL ret = CloseHandle(com);
-	if (ret) {
-		log_write_str(COM_CLOS, "SUCCESS");
+static void comapi_send(unsigned char* data, unsigned long len) {
+	if (!direct_mode) {
+		int i = 0, j = 0;
+		char* pout = malloc(len * 3);
+		for (i = 0; i < len; i++) {
+			pout[j++] = 0x80;
+			pout[j++] = data[i];
+			pout[j++] = 0x81;
+		}
+		comapi_ex_send(pout, len * 3);
+		free(pout);
 	} else {
-		log_write_err(COM_CLOS, "ERROR", GetLastError());
+		comapi_ex_send((char*) data, len);
 	}
+}
+
+static unsigned char inBuffer[COM_READ_BUFFER_SIZE];
+static unsigned long inLen = 0;
+static unsigned char tempBuffer[COM_READ_BUFFER_SIZE * 10];
+static long tempLen = 0;
+static unsigned long WINAPI comapi_read_thread(void* device) {
+	log_write_str(COM_INFO, "com_read_thread start");
+	while (running) {
+		Sleep(5);
+		if (!com_enable) {
+			continue;
+		}
+		inLen = current_com_read(inBuffer, COM_READ_BUFFER_SIZE);
+		if (inLen == 0) {
+			continue;
+		}
+		if (line_mode) {
+			int last = 0, i = 0;
+
+			for (i = 0; i < inLen; i++) {
+				if (inBuffer[i] == 0x0D) {
+					memcpy(tempBuffer + tempLen, inBuffer + last, i + 1 - last);
+					tempLen += i + 1 - last;
+					last = i + 1;
+					comapi_send(tempBuffer, tempLen);
+					tempLen = 0;
+				}
+			}
+			memcpy(tempBuffer + tempLen, inBuffer + last, i - last);
+			tempLen += i - last;
+		} else {
+			comapi_send(inBuffer, inLen);
+		}
+	}
+	log_write_str(COM_INFO, "com_read_thread ended");
+
 	return 0;
 }
 
-void mainmain() {
-	unsigned char cs1[] = { 0xAA, 0xE5, 0xAA, 0xE5, 0xAA, 0x02, 0x43, 0x30,
-			0x30, 0x30, 0x30, 0x03 };
-	unsigned char cs2[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00 };
-	COMPARAM parm;
-	parm.bByteSize = 8;
-	parm.bComId = 1;
-	parm.bParity = 0;
-	parm.bStopBits = 0;
-	parm.dwBaudRate = 9600;
-	parm.fBinary = 1;
-	void* hComm = com_open(&parm);
-	if (hComm == NULL) {
-		MessageBox(NULL, "not exist", "ok",
-				MB_ICONWARNING | MB_OKCANCEL | MB_DEFBUTTON1);
-		return;
+static void comapi_read_proc_start() {
+	if (running == 0) {
+		CreateThread(NULL, 0, comapi_read_thread, NULL, 0, 0);
+		running = 1;
 	}
-	unsigned long len = com_write(hComm, cs1, 12);
-	if (len == 0) {
-		MessageBox(NULL, "write error", "ok",
-				MB_ICONWARNING | MB_OKCANCEL | MB_DEFBUTTON1);
-	}
+}
 
-	int i = 0;
-	while (i++ < 10) {
-		if (com_read(hComm, cs2, 7) > 0) {
-			break;
+static void comapi_read_proc_stop() {
+	running = 0;
+	Sleep(10);
+}
+
+int comapi_set_enable(int state) {
+	com_enable = state;
+	if (com_enable && setup) {
+		if (current_com_open() == -1) {
+			com_enable = 0;
+			return FALSE;
 		}
+		comapi_read_proc_start();
+	} else {
+		comapi_read_proc_stop();
+		current_com_close();
+		//comchannel = 0;
+		setup = 0;
 	}
+	return TRUE;
+}
 
-	com_close(hComm);
+void comapi_set_output(int state) {
+	output = state;
+	if (state) {
+		log_write_str(COM_INFO, "com out 1");
+	} else {
+		log_write_str(COM_INFO, "com out 0");
+	}
+}
 
-//	unsigned char cs1[] = { 0xAA, 0xE5, 0xAA, 0xE5, 0xAA, 0x02, 0x43, 0x30,
-//			0x30, 0x30, 0x30, 0x03 };
-//	unsigned char cs2[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//			0x00, 0x00, 0x00, 0x00 };
-//	com_read_proc_start();
-//	com_setup('Y',0,0,0,0);
-//	com_set_line_mode(0);
-//	com_set_direct_mode(1);
-//	com_set_enable(1);
-//	com_set_output(1);
-//	com_receive(cs1,12);//com_write(hComm, cs1, 12);
-//	Sleep(1000);
-//	com_read_proc_stop();
+int comapi_writing_enable() {
+	return output && com_enable;
+}
+
+void comapi_set_line_mode(int state) {
+	line_mode = state;
+	if (state) {
+		log_write_str(COM_INFO, "line mode 1");
+	} else {
+		log_write_str(COM_INFO, "line mode 0");
+	}
+}
+
+void comapi_set_direct_mode(int state) {
+	direct_mode = state;
+	if (state) {
+		log_write_str(COM_INFO, "direct mode 1");
+	} else {
+		log_write_str(COM_INFO, "direct mode 0");
+	}
+}
+
+int comapi_receive(unsigned char* data, unsigned long len) {
+	return current_com_write(data, len);
 }

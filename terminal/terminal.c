@@ -12,7 +12,7 @@
 #include "putty.h"
 #include "terminal.h"
 #include "windows/message.h"
-#include "filter.h"
+#include "util/comapi.h"
 
 #include <io.h>
 #include <fcntl.h>
@@ -1579,7 +1579,7 @@ Terminal *term_init(Config *mycfg, struct unicode_data *ucsdata, void *frontend)
 
 	term->printer = print_new(cfg.fprintname, cfg.printmode, 0);
 
-	com_read_proc_start();
+	current_com_init();
 
 	return term;
 }
@@ -1630,7 +1630,7 @@ void term_free(Terminal *term) {
 
 	print_del(term->printer);
 
-	com_read_proc_stop();
+	current_com_uninit();
 
 	sfree(term);
 }
@@ -2464,10 +2464,10 @@ static void toggle_mode(Terminal *term, int mode, int query, int state) {
 			term->disptop = 0;
 			break;
 		case 50:
-			com_set_enable(state);
+			comapi_set_enable(state);
 			break;
 		case 51:
-			com_set_output(state);
+			comapi_set_output(state);
 			if (state) {
 				term_com_setup(term);
 			} else {
@@ -2475,10 +2475,10 @@ static void toggle_mode(Terminal *term, int mode, int query, int state) {
 			}
 			break;
 		case 53:
-			com_set_direct_mode(state);
+			comapi_set_direct_mode(state);
 			break;
 		case 54:
-			com_set_line_mode(state);
+			comapi_set_line_mode(state);
 			break;
 		case 1000: /* xterm mouse 1 */
 			term->xterm_mouse = state ? 1 : 0;
@@ -2578,14 +2578,14 @@ static void term_com_flush(Terminal *term) {
 	int len;
 	int size;
 
-	if (!com_get_output())
+	if (!comapi_writing_enable())
 		return; /* we need do nothing */
 
 	while ((size = bufchain_size(&term->com_buf)) > term->com_state) {
 		bufchain_prefix(&term->com_buf, &data, &len);
 		if (len > size - term->com_state)
 			len = size - term->com_state;
-		com_receive(data, len);
+		comapi_receive(data, len);
 		bufchain_consume(&term->com_buf, len);
 	}
 
@@ -2596,7 +2596,7 @@ static void term_com_finish(Terminal *term) {
 	int len, size;
 	char c;
 
-	if (!com_get_output())
+	if (!comapi_writing_enable())
 		return; /* we need do nothing */
 
 	term_com_flush(term);
@@ -2607,11 +2607,11 @@ static void term_com_finish(Terminal *term) {
 			bufchain_consume(&term->com_buf, size);
 			break;
 		} else {
-			com_receive(&c, 1);
+			comapi_receive(&c, 1);
 			bufchain_consume(&term->com_buf, 1);
 		}
 	}
-	com_set_output(0);
+	comapi_set_output(0);
 }
 
 /*
@@ -2664,6 +2664,53 @@ static void term_print_finish(Terminal *term) {
 	}
 	print_close(term->printer);
 	term->printing = term->only_printing = FALSE;
+}
+
+void com_process(char c, unsigned char *com, int *baudRate) {
+	switch (c) {
+	case 'Y':
+		*com = cfg.com01y;
+		if (cfg.useselfsety == 1) {
+			*baudRate = cfg.bandy;
+		}
+		break;
+	case 'Z':
+		*com = cfg.com02z;
+		if (cfg.useselfsetz == 1) {
+			*baudRate = cfg.bandz;
+		}
+		break;
+	case 'X':
+		*com = cfg.com03x;
+		if (cfg.useselfsetx == 1) {
+			*baudRate = cfg.bandx;
+		}
+		break;
+	case 'U':
+		*com = cfg.com04u;
+		if (cfg.useselfsetu == 1) {
+			*baudRate = cfg.bandu;
+		}
+		break;
+	case 'W':
+		*com = cfg.com05w;
+		if (cfg.useselfsetw == 1) {
+			*baudRate = cfg.bandw;
+		}
+		break;
+	case 'V':
+		*com = cfg.com06v;
+		if (cfg.useselfsetv == 1) {
+			*baudRate = cfg.bandv;
+		}
+		break;
+	default:
+		*com = cfg.com01y;
+		if (cfg.useselfsety == 1) {
+			*baudRate = cfg.bandy;
+		}
+		break;
+	}
 }
 
 /*
@@ -2745,7 +2792,7 @@ static void term_out(Terminal *term) {
 		}
 
 		//zhangbo
-		if (com_get_output()) {
+		if (comapi_writing_enable()) {
 			bufchain_add(&term->com_buf, &c, 1);
 
 			if (term->only_coming) {
@@ -3531,7 +3578,10 @@ static void term_out(Terminal *term) {
 					case ANSI('V','!'): //zhangbo
 						comchannel = c;
 						comselflag = 0;
-						com_setup(c, term->esc_args[0], term->esc_args[1],
+						unsigned char com = 1;
+						int baudRate = term->esc_args[0];
+						com_process(c, &com, &baudRate);
+						comapi_setup(com, baudRate, term->esc_args[1],
 								term->esc_args[2], term->esc_args[3]);
 						term->termstate = TOPLEVEL;
 						break;

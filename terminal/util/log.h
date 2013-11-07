@@ -28,6 +28,10 @@ void log_open();
 
 void log_close();
 
+void log_set_enable(int enable);
+
+void log_set_encrypt(int enable);
+
 void log_write(const char* type, const void* data, unsigned long len);
 
 void log_write_err(const char* type, const char* data, unsigned long err);

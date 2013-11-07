@@ -1,38 +1,31 @@
 /*
  * comapi.h
  *
- *  Created on: 2012-9-20
+ *  Created on: 2012-9-26
  *      Author: zhangbo
  */
 
 #ifndef COMAPI_H_
 #define COMAPI_H_
-
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct _COMPARAM {
-	unsigned char bComId;
-	unsigned char bByteSize;
-	unsigned char bStopBits;
-	unsigned char bParity;
-	unsigned long dwBaudRate;
-	unsigned long fBinary;
-	char bEvtChar;
-} COMPARAM, *LPCOMPARAM;
+int comapi_setup(unsigned char com, int baudRate, int parity, int byteSize, int stopBits);
 
-void* com_open(LPCOMPARAM param);
+/**
+ * 是否当前接收到的所有数据都写向串口（并且串口已经打开）
+ */
+int comapi_writing_enable();
 
-unsigned long com_read(void* com, unsigned char* buffer, unsigned long bufLen);
+int comapi_set_enable(int state);
+void comapi_set_output(int state);
+void comapi_set_line_mode(int state);
+void comapi_set_direct_mode(int state);
+int comapi_receive(unsigned char* data, unsigned long len);
 
-unsigned long com_write(void* com, const unsigned char* data,
-		unsigned long len);
-
-int com_close(void* com);
-
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif /* COMAPI_H_ */
+#endif /* EXTENDS_H_ */

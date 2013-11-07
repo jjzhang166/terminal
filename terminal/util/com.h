@@ -8,25 +8,28 @@
 #ifndef COM_H_
 #define COM_H_
 
-#include "comapi.h"
-
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
-int current_com_init();
+typedef struct _COMPARAM {
+	unsigned char bComId;
+	unsigned char bByteSize;
+	unsigned char bStopBits;
+	unsigned char bParity;
+	unsigned long dwBaudRate;
+	unsigned long fBinary;
+	char bEvtChar;
+} COMPARAM, *LPCOMPARAM;
 
-int current_com_uninit();
+void* com_open(LPCOMPARAM param);
 
-int current_com_setup(COMPARAM* comPtr);
+unsigned long com_read(void* com, unsigned char* buffer, unsigned long bufLen);
 
-int current_com_open();
+unsigned long com_write(void* com, const unsigned char* data,
+		unsigned long len);
 
-int current_com_close();
-
-int current_com_write(unsigned char *data, long len);
-
-unsigned long current_com_read(unsigned char *data, unsigned long len);
+int com_close(void* com);
 
 #ifdef  __cplusplus
 }
