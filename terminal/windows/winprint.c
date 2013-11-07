@@ -5,7 +5,6 @@
 #include "../putty.h"
 #include <windows.h>
 #include <winspool.h>
-#include "../util/logfile.h"
 #include "../util/print.h"
 #include "../windows/message.h"
 #include "../terminal.h"

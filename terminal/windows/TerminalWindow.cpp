@@ -232,7 +232,7 @@ inline void WinSetLong(HWND hwnd, T value, int which = GWL_USERDATA) {
 LRESULT CALLBACK TerminalWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam,
 		LPARAM lParam) {
 
-	int debug = 0; //=1时允许键盘输入，用于调试，正式版=0
+	int debug = 1; //=1时允许键盘输入，用于调试，正式版=0
 	LRESULT ret = 0;
 	::hwnd = hWnd;
 

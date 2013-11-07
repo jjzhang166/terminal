@@ -1,5 +1,5 @@
 TARGET = logview.exe
-LDFLAGS = -mwindows
+LDFLAGS = -mwindows -static
 INC_PATH = 
 LIBS_PATH = 
 LIBS_NAME = 
